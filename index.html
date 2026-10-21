@@ -1,0 +1,43 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#0b0f14">
+<title>Play Tycoon — Indie Dev Simulator</title>
+<meta name="description" content="A humorous indie game studio simulator. Build games, survive reviews, and try to make rent.">
+<link rel="stylesheet" href="style.css">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🎮</text></svg>">
+</head>
+<body>
+<div class="app">
+  <header class="topbar">
+    <div class="brand">
+      <div class="logo" aria-hidden="true">
+        <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M6 8h12a4 4 0 0 1 4 4v4a3 3 0 0 1-5.4 1.8L15 16H9l-1.6 1.8A3 3 0 0 1 2 16v-4a4 4 0 0 1 4-4Z"/>
+          <path d="M7 11v3M5.5 12.5h3"/>
+          <circle cx="16" cy="11.5" r="1"/><circle cx="18" cy="13.5" r="1"/>
+        </svg>
+      </div>
+      <div class="brand-text">
+        <strong data-i18n="app.name">Play Tycoon</strong>
+        <span data-i18n="app.tagline">Indie Dev Simulator</span>
+      </div>
+    </div>
+    <div class="statsbar" id="statsBar"></div>
+  </header>
+
+  <nav class="tabs" id="tabs" aria-label="Main navigation"></nav>
+
+  <main class="view" id="view"></main>
+
+  <footer class="foot" id="foot"></footer>
+</div>
+
+<div id="toasts" class="toasts" aria-live="polite"></div>
+<div id="modalRoot"></div>
+
+<script src="script.js"></script>
+</body>
+</html>
