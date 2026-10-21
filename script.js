@@ -1700,3 +1700,16 @@ const MiniGame = {
     if (this.onComplete) this.onComplete(this.score);
   }
 };
+
+/* --- PWA Service Worker Kaydı --- */
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('sw.js')
+      .then(registration => {
+        console.log('ServiceWorker kaydı başarılı:', registration.scope);
+      })
+      .catch(error => {
+        console.log('ServiceWorker kaydı başarısız:', error);
+      });
+  });
+}
