@@ -709,6 +709,18 @@ function renderDashboard() {
 
   html += '<div class="card"><h2><span class="ico">🏠</span>' + t('dash.title') + '</h2><p class="sub">' + t('dash.sub') + '</p>';
 
+  // --- YENİ: 2D Animasyonlu Stüdyo Ofisi ---
+  html += `
+    <div class="studio-room">
+      ${state.staff.dev > 0 ? '<div class="desk active"><div class="floating-icon" style="animation-delay:0s; left:10px">💻</div><div class="monitor"></div><div class="desk-char">👨‍💻</div><div class="desk-desk"></div></div>' : '<div class="desk"><div class="desk-char">🪑</div><div class="desk-desk"></div></div>'}
+      ${state.staff.artist > 0 ? '<div class="desk active"><div class="floating-icon" style="animation-delay:0.5s; left:15px">🎨</div><div class="monitor"></div><div class="desk-char">👩‍🎨</div><div class="desk-desk"></div></div>' : '<div class="desk"><div class="desk-char">🪑</div><div class="desk-desk"></div></div>'}
+      ${state.staff.tester > 0 ? '<div class="desk active"><div class="floating-icon" style="animation-delay:1s; left:5px">🔍</div><div class="monitor"></div><div class="desk-char">🕵️</div><div class="desk-desk"></div></div>' : '<div class="desk"><div class="desk-char">🪑</div><div class="desk-desk"></div></div>'}
+      ${state.staff.marketing > 0 ? '<div class="desk active"><div class="floating-icon" style="animation-delay:1.5s; left:10px">📢</div><div class="monitor"></div><div class="desk-char">📣</div><div class="desk-desk"></div></div>' : '<div class="desk"><div class="desk-char">🪑</div><div class="desk-desk"></div></div>'}
+      <div class="coffee-mug">☕</div>
+    </div>
+  `;
+  // -----------------------------------------
+
   if (state.project) {
     const p = state.project;
     const q = qualityOf(p);
@@ -1083,6 +1095,7 @@ function createProject() {
 }
 
 /* -------------------------------------------------------- project action */
+// --- YENİ: Mini Oyun Entegrasyonu ---
 function doProjectAction(key) {
   const p = state.project;
   if (!p) return;
@@ -1091,17 +1104,34 @@ function doProjectAction(key) {
   const cost = actionCost(def);
   if (state.money < cost) { Sfx.bad(); toast(t('toast.notEnough'), 'bad'); return; }
 
-  state.money -= cost;
-  p.progress += def.progress || 0;
-  if (def.gameplay) p.gameplay = clamp(p.gameplay + def.gameplay, 0, 100);
-  if (def.graphics) p.graphics = clamp(p.graphics + def.graphics, 0, 100);
-  if (def.testing)  p.testing  = clamp(p.testing + def.testing, 0, 100);
-  if (def.bugs)     p.bugs     = Math.max(0, p.bugs + def.bugs);
+  // Mini Oyunu Başlat
+  MiniGame.start((score) => {
+    // Oyun bitti, skora göre ödül hesapla
+    let progressBonus = Math.floor(score * 1.5);
+    let bugReduction = Math.floor(score / 3);
+    
+    state.money -= cost;
+    p.progress += def.progress + progressBonus;
+    
+    if (def.gameplay) p.gameplay = clamp(p.gameplay + def.gameplay, 0, 100);
+    if (def.graphics) p.graphics = clamp(p.graphics + def.graphics, 0, 100);
+    if (def.testing)  p.testing  = clamp(p.testing + def.testing, 0, 100);
+    
+    // Hatalar: Normal eylem + skor bonusu (Hataları düşürür)
+    if (def.bugs) p.bugs = Math.max(0, p.bugs + def.bugs - bugReduction);
 
-  Sfx.click();
-  save();
-  render();
+    if (score > 5) {
+      toast(`Harika! ${score} hata ezildi. Bonus: +${progressBonus} İlerleme`, 'good');
+      Sfx.good();
+    } else {
+      Sfx.click();
+    }
+
+    save();
+    render();
+  });
 }
+// -----------------------------------
 
 /* --------------------------------------------------------------- abandon */
 function confirmAbandon() {
@@ -1551,3 +1581,122 @@ if (document.readyState === 'loading') {
 } else {
   init();
 }
+
+/* --- 2D Canvas Mini Oyun Motoru --- */
+const MiniGame = {
+  overlay: null, canvas: null, ctx: null, req: null, timer: null,
+  bugs: [], score: 0, timeLeft: 10, onComplete: null,
+
+  start(callback) {
+    this.onComplete = callback;
+    this.bugs = [];
+    this.score = 0;
+    this.timeLeft = 10;
+    
+    // Arayüzü oluştur
+    this.overlay = document.createElement('div');
+    this.overlay.className = 'minigame-overlay';
+    this.overlay.innerHTML = `
+      <div class="minigame-header">
+        <h2>🐛 Hata Avcısı</h2>
+        <p>Ekranda beliren hatalara tıkla! (Kodla / Çiz / Test Et)</p>
+      </div>
+      <canvas id="bugCanvas"></canvas>
+      <div class="minigame-score">Skor: <span id="mgScore">0</span> | Süre: <span id="mgTime">10</span>s</div>
+    `;
+    document.body.appendChild(this.overlay);
+    
+    this.canvas = document.getElementById('bugCanvas');
+    this.ctx = this.canvas.getContext('2d');
+    
+    // Boyutları mobil uyumlu ayarla
+    const maxW = Math.min(window.innerWidth - 40, 500);
+    const maxH = Math.min(window.innerHeight - 200, 450);
+    this.canvas.width = maxW;
+    this.canvas.height = maxH;
+
+    // Event Listener (Dokunmatik ve Fare)
+    this.canvas.addEventListener('pointerdown', (e) => this.handleClick(e));
+
+    // Oyun Döngüsü ve Zamanlayıcı
+    this.spawnInterval = setInterval(() => this.spawnBug(), 400);
+    this.timer = setInterval(() => {
+      this.timeLeft--;
+      const el = document.getElementById('mgTime');
+      if (el) el.textContent = this.timeLeft;
+      if (this.timeLeft <= 0) this.end();
+    }, 1000);
+    
+    this.loop();
+  },
+
+  spawnBug() {
+    if (this.timeLeft <= 0) return;
+    const r = 18 + Math.random() * 10;
+    this.bugs.push({
+      x: r + Math.random() * (this.canvas.width - r * 2),
+      y: r + Math.random() * (this.canvas.height - r * 2),
+      r: r,
+      life: 1.0 // 1 saniye yaşasın
+    });
+  },
+
+  loop() {
+    if (!this.ctx) return;
+    this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
+    
+    for (let i = this.bugs.length - 1; i >= 0; i--) {
+      const b = this.bugs[i];
+      b.life -= 0.015; // Zamanla küçül
+      
+      if (b.life <= 0) {
+        this.bugs.splice(i, 1);
+        continue;
+      }
+
+      // Hatayı çiz (Emoji veya 2D daire)
+      this.ctx.beginPath();
+      this.ctx.arc(b.x, b.y, b.r * b.life, 0, Math.PI * 2);
+      this.ctx.fillStyle = b.life > 0.5 ? '#f87171' : '#ef4444';
+      this.ctx.fill();
+      this.ctx.strokeStyle = '#7f1d1d';
+      this.ctx.lineWidth = 3;
+      this.ctx.stroke();
+      
+      // Üzerine 🐛 emojisi koy (Canvas'ta metin olarak)
+      this.ctx.font = `${b.r * b.life * 1.5}px Arial`;
+      this.ctx.textAlign = 'center';
+      this.ctx.textBaseline = 'middle';
+      this.ctx.fillText('🐛', b.x, b.y + 2);
+    }
+    this.req = requestAnimationFrame(() => this.loop());
+  },
+
+  handleClick(e) {
+    const rect = this.canvas.getBoundingClientRect();
+    const x = e.clientX - rect.left;
+    const y = e.clientY - rect.top;
+    
+    for (let i = this.bugs.length - 1; i >= 0; i--) {
+      const b = this.bugs[i];
+      const dist = Math.hypot(x - b.x, y - b.y);
+      if (dist < b.r * b.life + 15) { // Tıklama toleransı
+        this.bugs.splice(i, 1);
+        this.score++;
+        document.getElementById('mgScore').textContent = this.score;
+        // Tıklama sesi (Kısa ve tiz)
+        if (window.Sfx) window.Sfx.beep(800, 0.05, 'square', 0.05);
+        break;
+      }
+    }
+  },
+
+  end() {
+    clearInterval(this.timer);
+    clearInterval(this.spawnInterval);
+    cancelAnimationFrame(this.req);
+    if (this.overlay) this.overlay.remove();
+    this.ctx = null;
+    if (this.onComplete) this.onComplete(this.score);
+  }
+};
